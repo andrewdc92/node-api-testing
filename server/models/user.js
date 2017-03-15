@@ -2,9 +2,8 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const jwt = require('jsonwebtoken');
 const _ = require('lodash');
-const bcrpyt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 
-//'new' denotes constuctor fn :)
 var UserSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -14,24 +13,24 @@ var UserSchema = new mongoose.Schema({
     unique: true,
     validate: {
       validator: validator.isEmail,
-      message: '{VALUE} is not a valid email address'
+      message: '{VALUE} is not a valid email'
     }
   },
-    password: {
+  password: {
+    type: String,
+    require: true,
+    minlength: 6
+  },
+  tokens: [{
+    access: {
       type: String,
-      require: true,
-      minlength: 6
+      required: true
     },
-    tokens: [{
-      access: {
-        type: String,
-        require: true
-      },
-      token: {
-        type: String,
-        required: true
-      }
-    }]
+    token: {
+      type: String,
+      required: true
+    }
+  }]
 });
 
 UserSchema.methods.toJSON = function () {
@@ -46,10 +45,10 @@ UserSchema.methods.generateAuthToken = function () {
   var access = 'auth';
   var token = jwt.sign({_id: user._id.toHexString(), access}, 'abc123').toString();
 
-  user.tokens.push({access, token})
+  user.tokens.push({access, token});
 
   return user.save().then(() => {
-      return token;
+    return token;
   });
 };
 
@@ -58,7 +57,7 @@ UserSchema.statics.findByToken = function (token) {
   var decoded;
 
   try {
-    decoded = jwt.verify(token, 'abc123')
+    decoded = jwt.verify(token, 'abc123');
   } catch (e) {
     return Promise.reject();
   }
@@ -70,7 +69,6 @@ UserSchema.statics.findByToken = function (token) {
   });
 };
 
-
 UserSchema.statics.findByCredentials = function (email, password) {
   var User = this;
 
@@ -80,6 +78,7 @@ UserSchema.statics.findByCredentials = function (email, password) {
     }
 
     return new Promise((resolve, reject) => {
+      // Use bcrypt.compare to compare password and user.password
       bcrypt.compare(password, user.password, (err, res) => {
         if (res) {
           resolve(user);
@@ -94,19 +93,18 @@ UserSchema.statics.findByCredentials = function (email, password) {
 UserSchema.pre('save', function (next) {
   var user = this;
 
-  //isModified returns a boolean if obj was modified
-   if (user.isModified('password')) {
-     bcrpyt.genSalt(10, (err, salt) => {
-       bcrpyt.hash(user.password, salt, (err, hash) => {
-         user.password = hash;
-         next();
-       });
-     });
-   } else {
-     next();
-   }
+  if (user.isModified('password')) {
+    bcrypt.genSalt(10, (err, salt) => {
+      bcrypt.hash(user.password, salt, (err, hash) => {
+        user.password = hash;
+        next();
+      });
+    });
+  } else {
+    next();
+  }
 });
 
-var User = mongoose.model('User', UserSchema );
+var User = mongoose.model('User', UserSchema);
 
-module.exports = {User};
+module.exports = {User}
